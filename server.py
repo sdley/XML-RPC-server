@@ -15,7 +15,7 @@ db_connection = mysql.connector.connect(
     password="",  
     database="producteurdb"  
 )
-db_cursor = db_connection.cursor()
+db_cursor = db_connection.cursor(buffered=True)
 
 def insert_message(source_ip, message, dest_ip, etatMessage=None):
     """Enregistre le message dans la base de données."""
@@ -87,19 +87,25 @@ class Buffer:
         """Récupère un élément du tampon."""
         if not self.queue.empty():
             item = self.queue.get()
-            message = f"{item} récupéré"
 
-            # begin test
-            # Recuperation de l'IP source de item
-            source_ip = recupere_item(item)
-            # Enregistrement du message dans la base de données avec les adresses IP dynamiques
-            insert_message(source_ip, message, consumer_ip, "OUI")  # IP source est l'IP du producteur
+            # Recup prod id
+            recup_prod_ip = "SELECT id, source_ip FROM messages WHERE message = %s"
+            db_cursor.execute(recup_prod_ip, (f"{item} ajouté",))
+            resultat = db_cursor.fetchone()
 
-            # end test
+            item_id, src_ip = resultat
 
-            # insert_message(get_local_ip(), message, consumer_ip)  # IP source est l'IP du producteur
-            
-            return f"Item {item} récupéré."
+            # update
+            update = """
+            UPDATE messages 
+            SET dest_ip = %s, recupere = %s, message = %s 
+            WHERE id = %s
+            """
+            new_message = f"{item} récupéré"
+            db_cursor.execute(update, (consumer_ip, "OUI", new_message, item_id))
+            db_connection.commit()
+
+            return f"Item '{item}' récupéré par {consumer_ip}. IP source : {src_ip}."
         else:
             return "Tampon vide. Impossible de récupérer un élément."
     
